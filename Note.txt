@@ -1,0 +1,124 @@
+	1. Add Conosle App as Client App
+
+	2. Add Atl project, then add Simple Object, which check ISupportErrorInfo and Connection points => Connection points is for call back
+
+	3. Add call back event in class view ->  AtlEventServerLib ->  _ICalculatorEvents
+
+	4. Add Connection Point   class view -> CCalculator -> Add Connection Point, Find _ICaculatorEvents_CP.h
+define and implement Fire_ functions according to idl.
+Example:
+//Name convention： Fire_<Dispatch function name defined in idl>
+//Parameters: the same as the function defined in idl
+HRESULT Fire_EventProgress(LONG idx, LONG val)
+	{
+		HRESULT hr = S_OK;
+		T* pThis = static_cast<T*>(this);
+		int cConnections = m_vec.GetSize();
+
+		for (int iConnection = 0; iConnection < cConnections; iConnection++)
+		{
+			pThis->Lock();
+			CComPtr<IUnknown> punkConnection = m_vec.GetAt(iConnection);
+			pThis->Unlock();
+            
+			/////Copy above/////
+			IDispatch* pConnection = static_cast<IDispatch*>(punkConnection.p);
+
+			if (pConnection)
+			{
+			    //Define the Com Variant list, number should be the same as the
+				//number of function parameters
+				CComVariant avarParams[2];
+				//Put parameters into list and assign the type
+				//VT_I4 = LONG   VT_R4  =  FLOAT   VT_BSTR = BSTR
+				avarParams[0] = idx;
+				avarParams[0].vt = VT_I4;
+				avarParams[1] = val;
+				avarParams[1].vt = VT_I4;
+				//Define the return value 
+				CComVariant varResult;
+                //first the param list, second is Dispid, third is number of parameters must be 2
+				//the last is named args count
+				DISPPARAMS params = { avarParams, NULL, 2, 0 };
+				//DispID must be the same as idl,  must be IID_NULL, default set as LOCALE_USEr_DEFAULT,
+				//The context of the invoke call, here is from a method not from a property
+				//param list ,  result
+				//pArgException, pArgError
+				hr = pConnection->Invoke(2, IID_NULL, LOCALE_USER_DEFAULT, DISPATCH_METHOD, &params, &varResult, NULL, NULL);
+			}
+		}
+		return hr;
+	}
+	
+	5. Setting app application to include the folder that contains the tlb of server. And add SINK class
+Example:
+//must include atlcom.h
+//Define the function info of the functions defined in the class, those are counterparts of server functions
+_ATL_FUNC_INFO OnEventProgressInfo =
+//call type __STDCALL,  return type void,  number of parameters,  parameters types
+{ CC_STDCALL, VT_EMPTY, 2, {VT_I4, VT_I4} };
+_ATL_FUNC_INFO OnEventStatusInfo =
+{ CC_STDCALL, VT_EMPTY, 1, {VT_BSTR} };
+
+//Sink class inherit IDispEventSimpleImpl: nId corresponding to the first number in SINK_ENTRY_INFO
+//current class,  Dispatch independent and identically distributed
+class CEventStatus:public IDispEventSimpleImpl<1, CEventStatus,&DIID__ICaculatorEvents>
+{
+private:
+    ICaculatorPtr m_pCaculator;
+public:
+    CEventStatus(ICaculatorPtr pCal)
+    {
+        m_pCaculator = pCal;
+		//Connect the Fire_ functions with the functions defined in the class
+        DispEventAdvise((IUnknown*)m_pCaculator);
+    }
+
+    ~CEventStatus()
+    {
+	    //Disconnect the Fire_ functions with the functions defined in the class
+        DispEventUnadvise((IUnknown*)m_pCaculator);
+    }
+
+	//Define the functions here must have the same parameter list
+    void __stdcall OnEventProgress(LONG idx, LONG val)
+    {
+        std::cout << "Index: " << idx << " , value" << val << std::endl;
+    }
+
+    void __stdcall OnEventStatus(BSTR msg)
+    {
+        std::wcout << "Status: " << msg << std::endl;
+		//Free the COM string
+        SysFreeString(msg);
+    }
+    //sink map
+	BEGIN_SINK_MAP(CEventStatus)
+        //nId the same with the first param of IDispEventSimpleImpl, this is useful when the class respond to more than 1 connection points
+        //DIID, DispID, with above three params we can figure out exact function in server
+		//function name in the class,  function info of the function in the class. with these two params we can figure out the function here
+		//Ready to connect two parts
+        SINK_ENTRY_INFO(1, DIID__ICaculatorEvents, 1, OnEventStatus,  &OnEventStatusInfo)
+        SINK_ENTRY_INFO(1, DIID__ICaculatorEvents, 2, OnEventProgress,&OnEventProgressInfo)
+	END_SINK_MAP()
+};
+
+	6.Use in App
+	int main()
+{
+//Prepare to load COM component
+    CoInitialize(NULL);
+    try {
+
+        ICaculatorPtr pCal(CLSID_Caculator);
+		//Create EventStatus, while the connection will be established.
+        CEventStatus evtsts(pCal);
+        LONG ret = 0;
+        ret = pCal->Add(1,20);
+    }
+    catch (_com_error e)
+    {
+        std::cout << e.Description() << std::endl;
+    }
+    CoUninitialize();
+	}

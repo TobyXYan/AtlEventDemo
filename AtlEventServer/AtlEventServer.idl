@@ -1,0 +1,49 @@
+// AtlEventServer.idl : IDL source for AtlEventServer
+//
+
+// This file will be processed by the MIDL tool to
+// produce the type library (AtlEventServer.tlb) and marshalling code.
+
+import "oaidl.idl";
+import "ocidl.idl";
+
+[
+	object,
+	uuid(62dc260c-c4ab-43b1-bd52-2bd3a047bdbc),
+	dual,
+	nonextensible,
+	pointer_default(unique)
+]
+interface ICaculator : IDispatch
+{
+	[id(1), helpstring("add a and b")] HRESULT Add([in] LONG a, [in] LONG b, [out, retval] LONG* ret);
+	[id(2), helpstring("Divide a by b")] HRESULT Div([in] LONG a, [in] LONG b, [out, retval] LONG* ret);
+};
+[
+	uuid(716ee8ad-4faa-4848-bf84-96aaf8a415bf),
+	version(1.0),
+]
+library AtlEventServerLib
+{
+	importlib("stdole2.tlb");
+	[
+		uuid(5c4c5286-1f3f-48c6-8b47-42fc5bb2865d)
+	]
+	dispinterface _ICaculatorEvents
+	{
+		properties:
+		methods:
+			[id(1), helpstring("Report Status message")] HRESULT EventStatus([in] BSTR msg);
+			[id(2), helpstring("Report progress")] HRESULT EventProgress([in] LONG idx, [in] LONG val);
+	};
+	[
+		uuid(7c4b051b-54cf-4e68-8416-31483e7932d6)
+	]
+	coclass Caculator
+	{
+		[default] interface ICaculator;
+		[default, source] dispinterface _ICaculatorEvents;
+	};
+};
+
+import "shobjidl.idl";
